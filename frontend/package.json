@@ -1,0 +1,7 @@
+{
+  "name": "stk-push-frontend",
+  "private": true,
+  "scripts": {
+    "dev": "node dev-server.cjs"
+  }
+}

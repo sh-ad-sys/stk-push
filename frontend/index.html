@@ -1,0 +1,1522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>M-Pesa Checkout</title>
+<style>
+  :root {
+    --safaricom: #00a651;
+    --safaricom-dark: #118236;
+    --safaricom-deep: #0b2a1b;
+    --safaricom-soft: #e7f8ed;
+    --safaricom-pale: #f6fbf7;
+    --ink: #102119;
+    --muted: #66786e;
+    --line: #d9e5dc;
+    --line-strong: #c7d8cc;
+    --focus: #e8f0ff;
+    --error: #c24132;
+    --error-soft: #fff1ef;
+    --surface: #ffffff;
+    --shadow: 0 26px 70px rgba(16, 33, 25, 0.18);
+    --radius: 24px;
+    --radius-sm: 16px;
+    font-size: 16px;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    min-height: 100%;
+    background:
+      radial-gradient(circle at top left, rgba(0, 166, 81, 0.10), transparent 34%),
+      linear-gradient(135deg, #eef5f1, #ffffff 42%, #edf4ef);
+  }
+
+  body {
+    min-height: 100vh;
+    margin: 0;
+    display: grid;
+    place-items: center;
+    padding: 14px;
+    color: var(--ink);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  button,
+  input {
+    font: inherit;
+  }
+
+  .checkout-card {
+    width: min(100%, 620px);
+    overflow: hidden;
+    border: 1px solid rgba(199, 216, 204, 0.95);
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(18px);
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 22px 28px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .title-group {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 0;
+  }
+
+  .mark {
+    display: grid;
+    place-items: center;
+    width: 54px;
+    height: 54px;
+    border-radius: 18px;
+    color: white;
+    background: linear-gradient(145deg, var(--safaricom), var(--safaricom-dark));
+    box-shadow: 0 18px 36px rgba(0, 166, 81, 0.25);
+    flex: 0 0 auto;
+  }
+
+  .title-copy h1 {
+    margin: 0;
+    color: var(--ink);
+    font-size: 24px;
+    line-height: 1.08;
+    letter-spacing: 0;
+  }
+
+  .title-copy p {
+    margin: 5px 0 0;
+    color: var(--muted);
+    font-size: 17px;
+    line-height: 1.3;
+  }
+
+  .ready-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 38px;
+    padding: 0 15px;
+    border: 1px solid #c9ead2;
+    border-radius: 999px;
+    color: var(--safaricom-dark);
+    background: var(--safaricom-soft);
+    font-size: 15px;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+
+  .ready-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--safaricom);
+    box-shadow: 0 0 0 7px rgba(0, 166, 81, 0.12);
+  }
+
+  .card-body {
+    padding: 24px 28px 28px;
+  }
+
+  .summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 18px;
+    min-height: 104px;
+    padding: 22px 22px 20px;
+    margin-bottom: 24px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: linear-gradient(180deg, #ffffff, var(--safaricom-pale));
+  }
+
+  .summary span {
+    display: block;
+    margin-bottom: 12px;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 850;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .summary strong {
+    display: block;
+    font-size: 34px;
+    line-height: 1;
+    letter-spacing: 0;
+  }
+
+  .summary small {
+    margin-bottom: 4px;
+    color: var(--muted);
+    font-size: 15px;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .field {
+    margin-bottom: 20px;
+  }
+
+  label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 9px;
+    color: var(--ink);
+    font-size: 17px;
+    font-weight: 850;
+  }
+
+  .label-note {
+    color: var(--muted);
+    font-size: 15px;
+    font-weight: 750;
+  }
+
+  .input-wrap {
+    position: relative;
+  }
+
+  .input-icon,
+  .currency {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    pointer-events: none;
+  }
+
+  .input-icon {
+    left: 24px;
+    display: grid;
+    place-items: center;
+  }
+
+  .currency {
+    left: 22px;
+    font-size: 18px;
+    font-weight: 850;
+    letter-spacing: 0.03em;
+  }
+
+  input {
+    width: 100%;
+    min-height: 58px;
+    border: 1.5px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: #fbfdfb;
+    color: var(--ink);
+    outline: none;
+    font-size: 18px;
+    transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+  }
+
+  input:hover {
+    border-color: var(--line-strong);
+  }
+
+  input:focus {
+    border-color: var(--safaricom);
+    background: var(--focus);
+    box-shadow: 0 0 0 4px rgba(0, 166, 81, 0.14);
+  }
+
+  input.invalid {
+    border-color: var(--error);
+    background: var(--error-soft);
+  }
+
+  .phone-input {
+    padding: 14px 18px 14px 58px;
+  }
+
+  .amount-input {
+    padding: 14px 18px 14px 72px;
+  }
+
+  .hint {
+    min-height: 18px;
+    margin: 8px 0 0;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.45;
+  }
+
+  .hint.error {
+    color: var(--error);
+    font-weight: 750;
+  }
+
+  .amount-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: 10px 0 0;
+  }
+
+  .amount-chip {
+    min-height: 46px;
+    border: 1.5px solid var(--line);
+    border-radius: 999px;
+    color: var(--ink);
+    background: white;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 850;
+    transition: border-color 150ms ease, color 150ms ease, background 150ms ease, transform 80ms ease;
+  }
+
+  .amount-chip:hover,
+  .amount-chip.active {
+    border-color: var(--safaricom);
+    color: var(--safaricom-dark);
+    background: var(--safaricom-soft);
+  }
+
+  .amount-chip:active {
+    transform: translateY(1px);
+  }
+
+  .pay-btn {
+    display: block;
+    /* center block-level button */
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+    position: relative;
+    gap: 16px;
+    /* keep the send button centered and not full-width */
+    width: auto;
+    max-width: 420px;
+    min-width: 220px;
+    height: 62px;
+    margin: 8px auto 8px;
+    padding: 0 36px; /* symmetric padding to help visual centering */
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: white;
+    background: linear-gradient(145deg, var(--safaricom), var(--safaricom-dark));
+    box-shadow: 0 18px 36px rgba(17, 130, 54, 0.30);
+    cursor: pointer;
+    font-size: 20px;
+    font-weight: 900;
+    transition: transform 90ms ease, box-shadow 150ms ease, filter 150ms ease;
+    position: relative;
+  }
+
+  .pay-btn:hover:not(:disabled) {
+    filter: saturate(1.08);
+    box-shadow: 0 22px 42px rgba(17, 130, 54, 0.36);
+  }
+
+  .pay-btn:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  .pay-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.68;
+    box-shadow: none;
+  }
+
+  .pay-btn:focus-visible,
+  .amount-chip:focus-visible {
+    outline: 4px solid rgba(0, 166, 81, 0.18);
+    outline-offset: 3px;
+  }
+
+  /* Center the visible button text while keeping the icon on the right */
+  #pay-btn-text {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 1;
+    white-space: nowrap;
+    line-height: normal;
+  }
+
+  /* Place the icon absolutely to the right so it doesn't affect centering */
+  #pay-btn-icon {
+    position: absolute;
+    right: 18px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 1;
+    pointer-events: none;
+    display: inline-block;
+  }
+
+  .spinner {
+    width: 22px;
+    height: 22px;
+    border: 2.5px solid rgba(255, 255, 255, 0.36);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 720ms linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .status {
+    display: none;
+    align-items: flex-start;
+    gap: 12px;
+    margin-top: 12px;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .status.show {
+    display: flex;
+  }
+
+  .status.pending {
+    border: 1px solid #eadca9;
+    color: #7a5518;
+    background: #fff8e6;
+  }
+
+  .status.success {
+    border: 1px solid #c9ead2;
+    color: var(--safaricom-dark);
+    background: var(--safaricom-soft);
+  }
+
+  .status.error {
+    border: 1px solid #f0c2bc;
+    color: var(--error);
+    background: var(--error-soft);
+  }
+
+  .status-icon {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+  }
+
+  .status-icon .spinner {
+    width: 18px;
+    height: 18px;
+    border-color: rgba(122, 85, 24, 0.25);
+    border-top-color: #7a5518;
+  }
+
+  .receipt {
+    display: none;
+    margin-top: 6px;
+    color: rgba(16, 33, 25, 0.78);
+    font-size: 13px;
+  }
+
+  .receipt code {
+    padding: 2px 7px;
+    border-radius: 7px;
+    background: rgba(16, 33, 25, 0.08);
+  }
+
+  @media (max-width: 720px) {
+    body {
+      min-height: 100svh;
+      padding: 10px;
+      place-items: start center;
+    }
+
+    .checkout-card {
+      width: 100%;
+      margin: 0;
+      border-radius: 18px;
+    }
+
+    .card-header,
+    .card-body {
+      padding: 16px;
+    }
+
+    .card-header {
+      align-items: center;
+      gap: 12px;
+    }
+
+    .title-group {
+      gap: 12px;
+    }
+
+    .mark {
+      width: 46px;
+      height: 46px;
+      border-radius: 15px;
+    }
+
+    .mark svg {
+      width: 27px;
+      height: 27px;
+    }
+
+    .title-copy h1 {
+      font-size: 21px;
+    }
+
+    .title-copy p {
+      margin-top: 3px;
+      font-size: 15px;
+    }
+
+    .ready-pill {
+      min-height: 32px;
+      padding: 0 11px;
+      gap: 7px;
+      font-size: 13px;
+    }
+
+    .ready-dot {
+      width: 9px;
+      height: 9px;
+      box-shadow: 0 0 0 5px rgba(0, 166, 81, 0.12);
+    }
+
+    .summary {
+      grid-template-columns: 1fr;
+      min-height: auto;
+      gap: 8px;
+      padding: 16px;
+      margin-bottom: 18px;
+    }
+
+    .summary span {
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+
+    .summary strong {
+      font-size: 28px;
+    }
+
+    .summary small {
+      text-align: left;
+      white-space: normal;
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    label {
+      margin-bottom: 7px;
+      font-size: 15px;
+    }
+
+    .label-note,
+    .hint {
+      font-size: 13px;
+    }
+
+    input {
+      min-height: 52px;
+      border-radius: 14px;
+      font-size: 16px;
+    }
+
+    .input-icon {
+      left: 17px;
+    }
+
+    .currency {
+      left: 16px;
+      font-size: 15px;
+    }
+
+    .phone-input {
+      padding: 13px 14px 13px 48px;
+    }
+
+    .amount-input {
+      padding: 13px 14px 13px 62px;
+    }
+
+    .hint {
+      min-height: 16px;
+      margin-top: 6px;
+    }
+
+    .amount-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .amount-chip {
+      min-height: 42px;
+      font-size: 15px;
+    }
+
+    .pay-btn {
+      min-height: 54px;
+      margin-top: 4px;
+      border-radius: 14px;
+      font-size: 17px;
+    }
+
+    .pay-btn svg {
+      width: 21px;
+      height: 21px;
+    }
+
+    .status {
+      margin-top: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+    }
+  }
+
+  @media (max-width: 430px) {
+    body {
+      padding: 8px;
+    }
+
+    .checkout-card {
+      border-radius: 16px;
+    }
+
+    .card-header,
+    .card-body {
+      padding: 14px;
+    }
+
+    .title-group {
+      gap: 10px;
+    }
+
+    .mark {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+    }
+
+    .title-copy h1 {
+      font-size: 19px;
+    }
+
+    .title-copy p {
+      font-size: 13px;
+    }
+
+    .ready-pill {
+      min-height: 28px;
+      padding: 0 9px;
+      font-size: 12px;
+    }
+
+    .summary strong {
+      font-size: 26px;
+    }
+
+    .label-note {
+      display: none;
+    }
+  }
+
+  @media (max-width: 360px) {
+    .card-header {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .summary,
+    .field {
+      margin-bottom: 14px;
+    }
+
+    .amount-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .amount-chip {
+      min-height: 39px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* Modal & Receipt Styles */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(16, 33, 25, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: fadeIn 200ms ease;
+  }
+
+  .modal-overlay.show {
+    display: flex;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      transform: translateY(20px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  .modal-content {
+    background: white;
+    border-radius: var(--radius);
+    box-shadow: 0 40px 80px rgba(16, 33, 25, 0.25);
+    padding: 32px;
+    max-width: 500px;
+    width: 100%;
+    animation: slideUp 300ms ease;
+  }
+
+  .receipt-modal {
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .receipt-header {
+    text-align: center;
+    border-bottom: 2px dashed var(--line);
+    padding-bottom: 16px;
+  }
+
+  .receipt-status-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    margin: 0 auto 16px;
+    animation: scaleIn 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .receipt-status-icon.success {
+    background: #e7f8ed;
+    color: var(--safaricom);
+  }
+
+  .receipt-status-icon.failed {
+    background: #fff1ef;
+    color: var(--error);
+  }
+
+  @keyframes scaleIn {
+    from {
+      transform: scale(0.8);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  .receipt-header h2 {
+    margin: 0 0 8px;
+    font-size: 24px;
+    color: var(--ink);
+  }
+
+  .receipt-header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .receipt-details {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--safaricom-pale);
+    padding: 16px;
+    border-radius: var(--radius-sm);
+  }
+
+  .receipt-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+  }
+
+  .receipt-row .label {
+    color: var(--muted);
+  }
+
+  .receipt-row .value {
+    color: var(--ink);
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+  }
+
+  .receipt-row.amount {
+    border-top: 1px solid var(--line);
+    padding-top: 12px;
+    margin-top: 8px;
+  }
+
+  .receipt-row.amount .value {
+    font-size: 18px;
+    color: var(--safaricom-dark);
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+  }
+
+  .modal-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 52px;
+    padding: 0 28px;
+    border: 1.5px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: white;
+    color: var(--ink);
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 700;
+    transition: all 150ms ease;
+  }
+
+  .modal-btn:hover {
+    border-color: var(--safaricom);
+    color: var(--safaricom);
+    background: var(--safaricom-soft);
+  }
+
+  .modal-btn.primary {
+    background: linear-gradient(145deg, var(--safaricom), var(--safaricom-dark));
+    border-color: transparent;
+    color: white;
+    box-shadow: 0 12px 24px rgba(0, 166, 81, 0.25);
+  }
+
+  .modal-btn.primary:hover {
+    box-shadow: 0 16px 32px rgba(0, 166, 81, 0.35);
+  }
+
+  /* Pending Payment Modal */
+  .pending-modal-content {
+    text-align: center;
+  }
+
+  .pending-timer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: 24px 0;
+    font-size: 48px;
+    font-weight: 900;
+    color: var(--safaricom);
+    font-family: 'Courier New', monospace;
+  }
+
+  .timer-pulse {
+    animation: pulse 1s ease infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  .pending-label {
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+
+  .pending-phone {
+    display: inline-block;
+    background: var(--safaricom-soft);
+    color: var(--safaricom-dark);
+    padding: 8px 16px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 15px;
+    margin: 16px 0 24px;
+  }
+
+  /* Success Auto-Refresh Animation */
+  @keyframes successPulse {
+    0% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.05);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  .receipt-modal.success-animation {
+    animation: slideUp 400ms ease, successPulse 600ms ease 400ms;
+  }
+
+  /* Timeout state */
+  .timeout-message {
+    color: var(--error);
+    font-size: 14px;
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--error-soft);
+    border-radius: var(--radius-sm);
+    border-left: 4px solid var(--error);
+  }
+
+  @media (max-width: 720px) {
+    .modal-content {
+      padding: 24px;
+    }
+
+    .receipt-modal {
+      padding: 20px;
+    }
+
+    .receipt-header h2 {
+      font-size: 20px;
+    }
+
+    .pending-timer {
+      font-size: 36px;
+    }
+
+    .modal-actions {
+      flex-direction: column;
+    }
+
+    .modal-btn {
+      width: 100%;
+    }
+  }
+</style>
+</head>
+<body>
+  <main class="checkout-card" aria-labelledby="checkout-title">
+    <header class="card-header">
+      <div class="title-group">
+        <span class="mark" aria-hidden="true">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+            <path d="M6 7.5H18M7.5 12H12M6 5H18C19.1 5 20 5.9 20 7V17C20 18.1 19.1 19 18 19H6C4.9 19 4 18.1 4 17V7C4 5.9 4.9 5 6 5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div class="title-copy">
+          <h1 id="checkout-title">Complete payment</h1>
+          <p>Lipa na M-Pesa Online</p>
+        </div>
+      </div>
+      <span class="ready-pill"><span class="ready-dot"></span>Ready</span>
+    </header>
+
+    <section class="card-body">
+      <div class="summary" aria-live="polite">
+        <div>
+          <span>Total to pay</span>
+          <strong id="summary-amount">KES 0</strong>
+        </div>
+        <small id="summary-phone">No number yet</small>
+      </div>
+
+      <form id="payment-form" novalidate>
+        <div class="field">
+          <label for="phone">
+            M-Pesa phone number
+            <span class="label-note">Safaricom line</span>
+          </label>
+          <div class="input-wrap">
+            <span class="input-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <path d="M9 4H15M8 2H16C17.1 2 18 2.9 18 4V20C18 21.1 17.1 22 16 22H8C6.9 22 6 21.1 6 20V4C6 2.9 6.9 2 8 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M11.5 18H12.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <input
+              type="tel"
+              id="phone"
+              name="phone"
+              class="phone-input"
+              placeholder="+2547XXXXXXXX"
+              inputmode="numeric"
+              autocomplete="tel"
+              aria-describedby="phone-hint"
+              required
+            />
+          </div>
+          <p class="hint" id="phone-hint">A payment prompt will be sent to this number.</p>
+        </div>
+
+        <div class="field">
+          <label for="amount">
+            Amount
+            <span class="label-note">KES</span>
+          </label>
+          <div class="input-wrap">
+            <span class="currency">KES</span>
+            <input
+              type="number"
+              id="amount"
+              name="amount"
+              class="amount-input"
+              placeholder="50"
+              min="1"
+              step="1"
+              aria-describedby="amount-hint"
+              required
+            />
+          </div>
+          <div class="amount-grid" aria-label="Quick amount options">
+            <button class="amount-chip" type="button" data-amount="50">50</button>
+            <button class="amount-chip" type="button" data-amount="100">100</button>
+            <button class="amount-chip" type="button" data-amount="500">500</button>
+            <button class="amount-chip" type="button" data-amount="1000">1,000</button>
+          </div>
+          <p class="hint" id="amount-hint">Use whole shilling amounts of KES 1 or more.</p>
+        </div>
+
+        <button type="submit" class="pay-btn" id="pay-btn">
+          <span id="pay-btn-text">Send</span>
+          <svg id="pay-btn-icon" width="25" height="25" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M5 12H19M13 6L19 12L13 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </form>
+
+      <!-- status banner removed as requested -->
+      <div style="display:none" aria-hidden="true"></div>
+    </section>
+  </main>
+
+  <!-- Success Receipt Modal -->
+  <div class="modal-overlay" id="successModal">
+    <div class="modal-content receipt-modal success-animation">
+      <div class="receipt-header">
+        <div class="receipt-status-icon success">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
+            <path d="M20 6L9 17L4 12" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h2>Payment Received!</h2>
+        <p id="successTime"></p>
+      </div>
+
+      <div class="receipt-details">
+        <div class="receipt-row">
+          <span class="label">Phone Number</span>
+          <span class="value" id="receiptPhone"></span>
+        </div>
+        <div class="receipt-row">
+          <span class="label">Transaction ID</span>
+          <span class="value" id="receiptTxnId"></span>
+        </div>
+        <div class="receipt-row amount">
+          <span class="label">Amount Paid</span>
+          <span class="value" id="receiptAmount"></span>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="modal-btn primary" id="successNewTransaction">New Transaction</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Failed Payment Modal -->
+  <div class="modal-overlay" id="failedModal">
+    <div class="modal-content receipt-modal">
+      <div class="receipt-header">
+        <div class="receipt-status-icon failed">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
+            <path d="M12 8V13M12 16H12.01M21 12C21 16.97 16.97 21 12 21C7.03 21 3 16.97 3 12C3 7.03 7.03 3 12 3C16.97 3 21 7.03 21 12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h2>Payment Failed</h2>
+        <p id="failedReason"></p>
+      </div>
+
+      <div class="modal-actions">
+        <!-- Action buttons removed as requested -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Pending Payment Modal (Timeout Warning) -->
+  <div class="modal-overlay" id="pendingModal">
+    <div class="modal-content receipt-modal pending-modal-content">
+      <div class="receipt-header">
+        <h2>Payment Pending</h2>
+        <p>Waiting for payment confirmation...</p>
+      </div>
+
+      <div>
+        <p class="pending-label">Time Remaining</p>
+        <div class="pending-timer">
+          <span id="countdownTimer" class="timer-pulse">60</span>
+          <span>s</span>
+        </div>
+        <p class="pending-label">Sending to</p>
+        <div class="pending-phone" id="pendingPhone"></div>
+        <p class="pending-label" id="pendingMessage" style="margin-top: 16px;">Waiting for you to enter PIN on your phone...</p>
+      </div>
+
+      <div class="modal-actions">
+        <!-- Pending modal actions removed as requested -->
+      </div>
+    </div>
+  </div>
+
+<script>
+  const API_BASE_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+    ? "http://localhost:3001"
+    : "";
+
+  // DOM Elements
+  const form = document.getElementById("payment-form");
+  const phoneInput = document.getElementById("phone");
+  const amountInput = document.getElementById("amount");
+  const phoneHint = document.getElementById("phone-hint");
+  const amountHint = document.getElementById("amount-hint");
+  const payBtn = document.getElementById("pay-btn");
+  const payBtnText = document.getElementById("pay-btn-text");
+  const payBtnIcon = document.getElementById("pay-btn-icon");
+  const statusBanner = document.getElementById("status-banner");
+  const statusIcon = document.getElementById("status-icon");
+  const statusMessage = document.getElementById("status-message");
+  const statusReceipt = document.getElementById("status-receipt");
+  const summaryAmount = document.getElementById("summary-amount");
+  const summaryPhone = document.getElementById("summary-phone");
+  const amountChips = Array.from(document.querySelectorAll(".amount-chip"));
+
+  // Modal Elements
+  const successModal = document.getElementById("successModal");
+  const failedModal = document.getElementById("failedModal");
+  const pendingModal = document.getElementById("pendingModal");
+  const successNewTransactionBtn = document.getElementById("successNewTransaction");
+  const failedRetryBtn = document.getElementById("failedRetry");
+  const failedCheckStatusBtn = document.getElementById("failedCheckStatus");
+  const failedNewTransactionBtn = document.getElementById("failedNewTransaction");
+  const countdownTimer = document.getElementById("countdownTimer");
+  const pendingMessage = document.getElementById("pendingMessage");
+
+  // State Management
+  let pollTimer = null;
+  let countdownInterval = null;
+  let currentCheckoutRequestId = null;
+  let currentTransactionData = null;
+  let timeoutSeconds = 60;
+
+  function normalizePhone(rawPhone) {
+    let phone = String(rawPhone).trim().replace(/\s+/g, "").replace(/^\+/, "");
+    if (phone.startsWith("0")) {
+      phone = "254" + phone.slice(1);
+    } else if (phone.startsWith("7") || phone.startsWith("1")) {
+      phone = "254" + phone;
+    }
+    return phone;
+  }
+
+  function isValidPhone(rawPhone) {
+    return /^254(7|1)\d{8}$/.test(normalizePhone(rawPhone));
+  }
+
+  function formatPhoneForDisplay(rawPhone) {
+    const digits = String(rawPhone).replace(/\D/g, "");
+    if (!digits) return "No number yet";
+    if (digits.startsWith("254") && digits.length >= 12) {
+      return `+${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 9)} ${digits.slice(9, 12)}`;
+    }
+    if (digits.startsWith("0") && digits.length >= 10) {
+      return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7, 10)}`;
+    }
+    return rawPhone;
+  }
+
+  function formatAmount(value) {
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || amount <= 0) return "KES 0";
+    return `KES ${Math.round(amount).toLocaleString("en-KE")}`;
+  }
+
+  function updateSummary() {
+    summaryAmount.textContent = formatAmount(amountInput.value);
+    summaryPhone.textContent = formatPhoneForDisplay(phoneInput.value.trim());
+
+    amountChips.forEach((chip) => {
+      chip.classList.toggle("active", chip.dataset.amount === amountInput.value.trim());
+    });
+  }
+
+  function hideAllModals() {
+    successModal.classList.remove("show");
+    failedModal.classList.remove("show");
+    pendingModal.classList.remove("show");
+  }
+
+  function showSuccessModal(data) {
+    document.getElementById("receiptPhone").textContent = data.phone;
+    document.getElementById("receiptTxnId").textContent = data.mpesaReceiptNumber || "N/A";
+    document.getElementById("receiptAmount").textContent = formatAmount(data.amount);
+    document.getElementById("successTime").textContent = new Date(data.completedAt).toLocaleString();
+    
+    successModal.classList.add("show");
+    
+    // Auto-close success modal after 5 seconds
+    setTimeout(() => {
+      resetForm();
+    }, 5000);
+  }
+
+  function showFailedModal(reason, options = {}) {
+    const minimal = Boolean(options.minimal);
+    const autoDismiss = Boolean(options.autoDismiss);
+
+    const reasonText = reason || "The payment could not be completed. Please try again.";
+
+    if (minimal) {
+      document.getElementById("failedReason").textContent = "Payment failed";
+      // hide action buttons for the minimal transient message
+      if (failedRetryBtn) failedRetryBtn.style.display = "none";
+      if (failedCheckStatusBtn) failedCheckStatusBtn.style.display = "none";
+      if (failedNewTransactionBtn) failedNewTransactionBtn.style.display = "none";
+      // hide status banner if present
+      if (statusBanner) statusBanner.style.display = "none";
+    } else {
+      document.getElementById("failedReason").textContent = reasonText;
+      // ensure action buttons are visible for full failure modal
+      if (failedRetryBtn) failedRetryBtn.style.display = "inline-block";
+      if (failedCheckStatusBtn) failedCheckStatusBtn.style.display = "inline-block";
+      if (failedNewTransactionBtn) failedNewTransactionBtn.style.display = "inline-block";
+      if (statusBanner) statusBanner.style.display = "block";
+    }
+
+    console.error("Failed modal shown with reason:", minimal ? reasonText : reasonText);
+    failedModal.classList.add("show");
+
+    // Always auto-hide the failed modal and reset the form after 2 seconds
+    setTimeout(() => {
+      failedModal.classList.remove("show");
+      resetForm();
+    }, 2000);
+  }
+
+  function showPendingModal(phone, amount) {
+    document.getElementById("pendingPhone").textContent = formatPhoneForDisplay(phone);
+    pendingModal.classList.add("show");
+    startCountdown();
+  }
+
+  function startCountdown() {
+    let remaining = timeoutSeconds;
+    countdownTimer.textContent = remaining;
+
+    countdownInterval = setInterval(() => {
+      remaining--;
+      countdownTimer.textContent = remaining;
+
+      if (remaining <= 0) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+        pendingMessage.textContent = "PIN submitted? We are still checking for M-Pesa confirmation...";
+        setStatus("pending", "Payment submitted. Still checking for M-Pesa confirmation.", { spinner: true });
+      }
+    }, 1000);
+  }
+
+  function stopCountdown() {
+    if (countdownInterval) {
+      clearInterval(countdownInterval);
+      countdownInterval = null;
+    }
+  }
+
+  function iconFor(type) {
+    if (type === "success") {
+      return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17L4 12" stroke="#118236" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    }
+    if (type === "error") {
+      return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 8V13M12 16H12.01M21 12C21 16.97 16.97 21 12 21C7.03 21 3 16.97 3 12C3 7.03 7.03 3 12 3C16.97 3 21 7.03 21 12Z" stroke="#c24132" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    }
+    return "";
+  }
+
+  function setStatus(type, message, options = {}) {
+    const spinner = Boolean(options.spinner);
+    const receipt = options.receipt || "";
+    if (statusBanner) {
+      statusBanner.className = `status show ${type}`;
+      if (statusIcon) statusIcon.innerHTML = spinner ? '<span class="spinner"></span>' : iconFor(type);
+      if (statusMessage) statusMessage.textContent = message;
+
+      if (statusReceipt) {
+        if (receipt) {
+          statusReceipt.style.display = "block";
+          statusReceipt.innerHTML = `Receipt: <code>${receipt}</code>`;
+        } else {
+          statusReceipt.style.display = "none";
+          statusReceipt.textContent = "";
+        }
+      }
+    }
+  }
+
+  function clearFieldErrors() {
+    phoneInput.classList.remove("invalid");
+    amountInput.classList.remove("invalid");
+    phoneHint.classList.remove("error");
+    amountHint.classList.remove("error");
+    phoneHint.textContent = "A payment prompt will be sent to this number.";
+    amountHint.textContent = "Use whole shilling amounts of KES 1 or more.";
+  }
+
+  function validateForm() {
+    clearFieldErrors();
+    let isValid = true;
+    const amount = Number(amountInput.value);
+
+    if (!isValidPhone(phoneInput.value)) {
+      phoneInput.classList.add("invalid");
+      phoneHint.classList.add("error");
+      phoneHint.textContent = "Enter a valid Safaricom number, for example 0712 345 678.";
+      isValid = false;
+    }
+
+    if (!Number.isFinite(amount) || amount < 1) {
+      amountInput.classList.add("invalid");
+      amountHint.classList.add("error");
+      amountHint.textContent = "Enter an amount of at least KES 1.";
+      isValid = false;
+    }
+
+    return isValid;
+  }
+
+  function setLoading(isLoading) {
+    payBtn.disabled = isLoading;
+    payBtnText.textContent = isLoading ? "Sending request" : "Send a prompt";
+    payBtnIcon.style.display = isLoading ? "none" : "block";
+
+    const existingSpinner = payBtn.querySelector(".spinner");
+    if (isLoading && !existingSpinner) {
+      payBtn.insertAdjacentHTML("afterbegin", '<span class="spinner"></span>');
+    }
+    if (!isLoading && existingSpinner) {
+      existingSpinner.remove();
+    }
+  }
+
+  function resetForm() {
+    form.reset();
+    phoneInput.value = "";
+    amountInput.value = "50";
+    updateSummary();
+    if (statusBanner) statusBanner.classList.remove("show");
+    clearFieldErrors();
+    hideAllModals();
+    stopCountdown();
+    pendingMessage.textContent = "Waiting for you to enter PIN on your phone...";
+  }
+
+  async function pollStatus(checkoutRequestId, attemptsLeft = 40) {
+    if (attemptsLeft <= 0) {
+      stopCountdown();
+      setStatus("pending", "The transaction is still under processing. Use Check Status in a moment.", { spinner: true });
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/mpesa/status/${checkoutRequestId}`);
+      const data = await res.json();
+        console.log("pollStatus response:", data);
+
+      if (data.success === false) {
+        console.error("pollStatus query error:", data);
+        setStatus("error", data.message || "Unable to verify payment status.", { receipt: data.detail || "" });
+        pollTimer = setTimeout(() => pollStatus(checkoutRequestId, attemptsLeft - 1), 3000);
+        return;
+      }
+
+      if (data.status === "SUCCESS") {
+        stopCountdown();
+        pendingModal.classList.remove("show");
+        setTimeout(() => {
+          currentTransactionData = data;
+          showSuccessModal(data);
+          setStatus("success", "Payment received. Thank you!", { receipt: data.mpesaReceiptNumber });
+        }, 200);
+        return;
+      }
+
+      if (data.status === "FAILED") {
+        stopCountdown();
+        pendingModal.classList.remove("show");
+        setTimeout(() => {
+          showFailedModal(null, { minimal: true, autoDismiss: true });
+        }, 200);
+        return;
+      }
+
+      setStatus("pending", data.message || data.resultDesc || "Waiting for you to enter your M-Pesa PIN.", { spinner: true });
+      pollTimer = setTimeout(() => pollStatus(checkoutRequestId, attemptsLeft - 1), 3000);
+    } catch (err) {
+      console.error("pollStatus error:", err);
+      pollTimer = setTimeout(() => pollStatus(checkoutRequestId, attemptsLeft - 1), 3000);
+    }
+  }
+
+  // Event Listeners
+  phoneInput.addEventListener("input", updateSummary);
+  amountInput.addEventListener("input", updateSummary);
+
+  amountChips.forEach((chip) => {
+    chip.addEventListener("click", () => {
+      amountInput.value = chip.dataset.amount;
+      amountInput.focus();
+      updateSummary();
+    });
+  });
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (pollTimer) clearTimeout(pollTimer);
+    stopCountdown();
+
+    if (!validateForm()) return;
+
+    setLoading(true);
+    setStatus("pending", "Sending the payment request to your phone.", { spinner: true });
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/mpesa/stk-push`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: phoneInput.value.trim(),
+          amount: amountInput.value.trim(),
+          accountReference: "Payment",
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!data.success) {
+        setLoading(false);
+        console.error("STK Push failed:", data);
+        const rawText = data.raw && typeof data.raw === 'object' ? JSON.stringify(data.raw) : data.raw || '';
+        const errorMsg = data.message || "Something went wrong. Please try again.";
+        setStatus("error", errorMsg);
+        if (rawText) {
+          console.error("STK Push raw error:", rawText);
+        }
+        showFailedModal(`${errorMsg}${rawText ? ' — ' + rawText : ''}`);
+        return;
+      }
+
+      setLoading(false);
+      currentCheckoutRequestId = data.checkoutRequestId;
+      setStatus("pending", "Check your phone and enter your M-Pesa PIN to complete payment.", { spinner: true });
+      showPendingModal(phoneInput.value.trim(), amountInput.value.trim());
+      pollStatus(data.checkoutRequestId);
+    } catch (err) {
+      setLoading(false);
+      setStatus("error", "Could not reach the payment server. Check your connection and try again.");
+      showFailedModal("Network error. Please check your connection and try again.");
+    }
+  });
+
+  // Modal Button Handlers
+  successNewTransactionBtn.addEventListener("click", resetForm);
+  // pendingCancelBtn listener removed per UI simplification
+
+  // pendingResendBtn listener removed per UI simplification
+
+  
+
+  // Close modals when clicking overlay
+  document.getElementById("successModal").addEventListener("click", (e) => {
+    if (e.target.id === "successModal") {
+      resetForm();
+    }
+  });
+
+  document.getElementById("failedModal").addEventListener("click", (e) => {
+    if (e.target.id === "failedModal") {
+      hideAllModals();
+    }
+  });
+
+  document.getElementById("pendingModal").addEventListener("click", (e) => {
+    if (e.target.id === "pendingModal") {
+      // Don't close pending modal by clicking outside - user should use buttons
+    }
+  });
+
+  // Initialize
+  amountInput.value = "50";
+  updateSummary();
+</script>
+</body>
+</html>
