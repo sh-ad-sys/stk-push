@@ -9,11 +9,24 @@ import {
 dotenv.config();
 
 const app = express();
+
+// CORS configuration with explicit preflight handling
 app.use(cors({
-  origin: 'https://stk-push-zeta.vercel.app',
-  credentials: true
+  origin: ['https://stk-push-zeta.vercel.app', 'http://localhost:3000', 'http://localhost:5173'],
+  credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
 app.use(express.json());
+
+// Explicit OPTIONS handler for preflight requests
+app.options('*', cors({
+  origin: ['https://stk-push-zeta.vercel.app', 'http://localhost:3000', 'http://localhost:5173'],
+  credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 // In-memory store of transactions, keyed by CheckoutRequestID.
 // This is fine for a small payment-only app / demo. For production,
