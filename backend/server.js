@@ -9,7 +9,10 @@ import {
 dotenv.config();
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: 'https://stk-push-zeta.vercel.app',
+  credentials: true
+}));
 app.use(express.json());
 
 // In-memory store of transactions, keyed by CheckoutRequestID.
