@@ -1383,7 +1383,8 @@
   async function pollStatus(checkoutRequestId, attemptsLeft = 40) {
     if (attemptsLeft <= 0) {
       stopCountdown();
-      setStatus("pending", "The transaction is still under processing. Use Check Status in a moment.", { spinner: true });
+      pendingModal.classList.remove("show");
+      setStatus("pending", "The transaction is still under processing. Please wait or refresh the page.", { spinner: false });
       return;
     }
 
@@ -1393,8 +1394,13 @@
         console.log("pollStatus response:", data);
 
       if (data.success === false) {
-        console.error("pollStatus query error:", data);
-        setStatus("error", data.message || "Unable to verify payment status.", { receipt: data.detail || "" });
+        console.warn("pollStatus pending verification:", data);
+        if (data.status === "PENDING") {
+          pendingMessage.textContent = "Payment submitted? We are still checking for M-Pesa confirmation...";
+          setStatus("pending", data.message || "Waiting for M-Pesa confirmation.", { spinner: true });
+        } else {
+          setStatus("error", data.message || "Unable to verify payment status.", { receipt: data.detail || "" });
+        }
         pollTimer = setTimeout(() => pollStatus(checkoutRequestId, attemptsLeft - 1), 3000);
         return;
       }
