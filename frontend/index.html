@@ -1353,10 +1353,11 @@
       const data = await res.json();
 
       if (!res.ok || data.success === false) {
-        stopCountdown();
-        const message = data.message || "Unable to verify the payment status with M-Pesa.";
-        setStatus("error", message);
+        const message = data.message || "Status check is temporarily unavailable. Waiting for M-Pesa payment confirmation.";
+        console.warn("Payment status check failed; will retry:", message);
+        setStatus("pending", message, { spinner: true });
         pendingMessage.textContent = message;
+        pollTimer = setTimeout(() => pollStatus(checkoutRequestId, attemptsLeft), 5000);
         return;
       }
 

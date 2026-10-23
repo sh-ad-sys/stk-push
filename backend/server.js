@@ -156,15 +156,23 @@ app.get("/api/mpesa/status/:checkoutRequestId", async (req, res) => {
   // No callback yet — actively ask Safaricom for the current status.
   try {
     const result = await querySTKStatus(checkoutRequestId);
+    const latestRecord = transactions.get(checkoutRequestId);
+
+    // A callback may have arrived while the Daraja status query was in flight.
+    // Never let an older query result overwrite that terminal callback result.
+    if (latestRecord && latestRecord.status !== "PENDING") {
+      return res.json({ success: true, ...latestRecord });
+    }
+
     const status = getQueryStatus(result);
     const updatedRecord = {
-      ...record,
+      ...latestRecord,
       status,
       resultDesc: result.ResultDesc,
       ...(status !== "PENDING" ? { completedAt: new Date().toISOString() } : {}),
     };
 
-    if (record || status !== "PENDING") {
+    if (latestRecord || status !== "PENDING") {
       transactions.set(checkoutRequestId, updatedRecord);
     }
 
@@ -175,10 +183,16 @@ app.get("/api/mpesa/status/:checkoutRequestId", async (req, res) => {
     });
   } catch (error) {
     console.error("STK status query failed:", error.message);
-    return res.status(502).json({
-      success: false,
-      status: "UNKNOWN",
-      message: error.message,
+
+    const latestRecord = transactions.get(checkoutRequestId);
+    if (latestRecord && latestRecord.status !== "PENDING") {
+      return res.json({ success: true, ...latestRecord });
+    }
+
+    return res.json({
+      success: true,
+      status: "PENDING",
+      message: "Status check is temporarily unavailable. Waiting for M-Pesa payment confirmation.",
     });
   }
 });
