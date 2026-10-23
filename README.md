@@ -163,6 +163,12 @@ can simulate the customer's PIN entry directly from the Daraja portal's
 **"STK Push request failed"** — check your Consumer Key/Secret and that
 `MPESA_CALLBACK_URL` isn't still the placeholder value.
 
+**"OAuth request was blocked by its security gateway"** — Daraja's OAuth
+endpoint returned an upstream security block page, so no STK request was sent.
+Contact Daraja support with the incident ID shown in the error and the time of
+the request. Do not disable TLS certificate checks or retry the payment request
+to work around the block.
+
 **Prompt never arrives on phone** — confirm you're using a sandbox-registered
 test number, not your own.
 

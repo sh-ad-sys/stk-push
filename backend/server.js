@@ -9,31 +9,13 @@ import {
 dotenv.config();
 
 const app = express();
-
-// CORS configuration with explicit preflight handling
-app.use(cors({
-  origin: ['https://mpesa-paymentt.vercel.app', 'http://localhost:8080', 'http://localhost:5173'],
-  credentials: true,
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
+app.use(cors());
 app.use(express.json());
-
-// Explicit OPTIONS handler for preflight requests
-app.options('*', cors({
-  origin: ['https://mpesa-paymentt.vercel.app', 'http://localhost:8080', 'http://localhost:5173'],
-  credentials: true,
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
 
 // In-memory store of transactions, keyed by CheckoutRequestID.
 // This is fine for a small payment-only app / demo. For production,
 // replace with a real database (Postgres, MongoDB, etc).
 const transactions = new Map();
-const STATUS_QUERY_GRACE_MS = 10_000;
-const STATUS_QUERY_COOLDOWN_MS = 20_000;
 
 function getQueryStatus(result) {
   const resultCode = String(result.ResultCode ?? "");
@@ -55,42 +37,6 @@ function getQueryStatus(result) {
   return "FAILED";
 }
 
-function isSuccessCode(resultCode) {
-  return String(resultCode) === "0";
-}
-
-function shouldQueryRemoteStatus(record) {
-  if (!record) {
-    return true;
-  }
-
-  const createdAt = record.createdAt ? new Date(record.createdAt).getTime() : 0;
-  const lastStatusQueryAt = record.lastStatusQueryAt ? new Date(record.lastStatusQueryAt).getTime() : 0;
-  const now = Date.now();
-
-  return (
-    (!createdAt || now - createdAt >= STATUS_QUERY_GRACE_MS) &&
-    (!lastStatusQueryAt || now - lastStatusQueryAt >= STATUS_QUERY_COOLDOWN_MS)
-  );
-}
-
-function mergeTransaction(checkoutRequestId, data) {
-  const existing = transactions.get(checkoutRequestId) || {};
-  const record = {
-    ...existing,
-    ...data,
-    checkoutRequestId,
-    updatedAt: new Date().toISOString(),
-  };
-
-  transactions.set(checkoutRequestId, record);
-  return record;
-}
-
-function getCallbackMetadataValue(items, name) {
-  return items.find((item) => String(item.Name).toLowerCase() === name.toLowerCase())?.Value;
-}
-
 /**
  * POST /api/mpesa/stk-push
  * Body: { phone, amount, accountReference?, description? }
@@ -107,15 +53,12 @@ app.post("/api/mpesa/stk-push", async (req, res) => {
   }
 
   try {
-    console.log("STK push request received", { phone, amount, accountReference, description });
     const result = await initiateSTKPush({
       phone,
       amount,
       accountReference,
       description,
     });
-
-    console.log("STK push response", result);
 
     if (result.ResponseCode === "0") {
       transactions.set(result.CheckoutRequestID, {
@@ -141,21 +84,10 @@ app.post("/api/mpesa/stk-push", async (req, res) => {
       raw: result,
     });
   } catch (error) {
-    const status = error?.response?.status;
-    const responseData = error?.response?.data;
-    const detail = responseData?.errorMessage || responseData?.ResponseDescription || responseData?.requestId || error.message;
-
-    console.error("STK push error:", {
-      status,
-      detail,
-      responseData,
-      requestBody: { phone, amount, accountReference, description },
-    });
-
-    return res.status(status ? 502 : 500).json({
+    console.error("STK push error:", error.message);
+    return res.status(500).json({
       success: false,
-      message: detail || error.message,
-      raw: responseData || null,
+      message: error.message,
     });
   }
 });
@@ -177,32 +109,31 @@ app.post("/api/mpesa/callback", (req, res) => {
 
   const { CheckoutRequestID, ResultCode, ResultDesc, CallbackMetadata } = callback;
 
-  if (isSuccessCode(ResultCode)) {
+  const existing = transactions.get(CheckoutRequestID) || {};
+
+  if (String(ResultCode) === "0") {
     // Payment successful — extract details from CallbackMetadata
     const items = CallbackMetadata?.Item || [];
-    const get = (name) => getCallbackMetadataValue(items, name);
-    const transactionId = get("MpesaReceiptNumber");
+    const get = (name) => items.find((i) => i.Name === name)?.Value;
 
-    const record = mergeTransaction(CheckoutRequestID, {
+    transactions.set(CheckoutRequestID, {
+      ...existing,
       status: "SUCCESS",
-      transactionId,
-      mpesaReceiptNumber: transactionId,
+      mpesaReceiptNumber: get("MpesaReceiptNumber"),
       amount: get("Amount"),
       phone: get("PhoneNumber"),
       transactionDate: get("TransactionDate"),
       resultDesc: ResultDesc,
-      rawCallback: callback,
       completedAt: new Date().toISOString(),
     });
-    console.log(`Transaction ${CheckoutRequestID} marked SUCCESS`, record);
   } else {
     // Payment failed or was cancelled by the user
-    const record = mergeTransaction(CheckoutRequestID, {
+    transactions.set(CheckoutRequestID, {
+      ...existing,
       status: "FAILED",
       resultDesc: ResultDesc,
       completedAt: new Date().toISOString(),
     });
-    console.log(`Transaction ${CheckoutRequestID} marked FAILED`, record);
   }
 
   // Always acknowledge receipt to Safaricom, or it will retry the callback.
@@ -218,62 +149,36 @@ app.get("/api/mpesa/status/:checkoutRequestId", async (req, res) => {
   const { checkoutRequestId } = req.params;
   const record = transactions.get(checkoutRequestId);
 
-  console.log(`Status check for ${checkoutRequestId}:`, record ? record.status : "not found");
-
   if (record && record.status !== "PENDING") {
-    return res.json({ success: true, status: record.status, ...record });
-  }
-
-  if (!shouldQueryRemoteStatus(record)) {
-    return res.json({
-      success: true,
-      status: "PENDING",
-      message: "Waiting for M-Pesa confirmation callback.",
-      ...record,
-    });
+    return res.json({ success: true, ...record });
   }
 
   // No callback yet — actively ask Safaricom for the current status.
   try {
-    mergeTransaction(checkoutRequestId, {
-      status: "PENDING",
-      lastStatusQueryAt: new Date().toISOString(),
-    });
-
     const result = await querySTKStatus(checkoutRequestId);
     const status = getQueryStatus(result);
-    const nextRecord = mergeTransaction(checkoutRequestId, {
+    const updatedRecord = {
+      ...record,
       status,
       resultDesc: result.ResultDesc,
-      rawStatusQuery: result,
       ...(status !== "PENDING" ? { completedAt: new Date().toISOString() } : {}),
-    });
+    };
+
+    if (record || status !== "PENDING") {
+      transactions.set(checkoutRequestId, updatedRecord);
+    }
 
     return res.json({
       success: true,
-      status,
-      resultDesc: result.ResultDesc,
-      ...nextRecord,
+      ...updatedRecord,
       raw: result,
     });
   } catch (error) {
-    const statusCode = error?.response?.status;
-    const responseData = error?.response?.data;
-    const detail = responseData?.errorMessage || responseData?.ResponseDescription || error?.message || "Unable to query M-Pesa status";
-
-    console.error("STK status query failed:", {
-      checkoutRequestId,
-      statusCode,
-      detail,
-      responseData,
-    });
-
-    return res.json({
+    console.error("STK status query failed:", error.message);
+    return res.status(502).json({
       success: false,
-      status: "PENDING",
-      message: `Unable to verify status with M-Pesa (${statusCode || "network error"}). Still waiting for callback.`,
-      detail,
-      raw: responseData || null,
+      status: "UNKNOWN",
+      message: error.message,
     });
   }
 });
@@ -351,7 +256,7 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
-const PORT = Number(process.env.PORT || 3000);
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`M-Pesa STK Push backend running on http://localhost:${PORT}`);
 });

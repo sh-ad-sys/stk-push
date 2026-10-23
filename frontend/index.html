@@ -295,20 +295,13 @@
   }
 
   .pay-btn {
-    display: block;
-    /* center block-level button */
-    margin-left: auto;
-    margin-right: auto;
-    text-align: center;
-    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     gap: 16px;
-    /* keep the send button centered and not full-width */
-    width: auto;
-    max-width: 420px;
-    min-width: 220px;
-    height: 62px;
-    margin: 8px auto 8px;
-    padding: 0 36px; /* symmetric padding to help visual centering */
+    width: 100%;
+    min-height: 62px;
+    margin-top: 8px;
     border: 0;
     border-radius: var(--radius-sm);
     color: white;
@@ -318,7 +311,6 @@
     font-size: 20px;
     font-weight: 900;
     transition: transform 90ms ease, box-shadow 150ms ease, filter 150ms ease;
-    position: relative;
   }
 
   .pay-btn:hover:not(:disabled) {
@@ -340,29 +332,6 @@
   .amount-chip:focus-visible {
     outline: 4px solid rgba(0, 166, 81, 0.18);
     outline-offset: 3px;
-  }
-
-  /* Center the visible button text while keeping the icon on the right */
-  #pay-btn-text {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    pointer-events: none;
-    z-index: 1;
-    white-space: nowrap;
-    line-height: normal;
-  }
-
-  /* Place the icon absolutely to the right so it doesn't affect centering */
-  #pay-btn-icon {
-    position: absolute;
-    right: 18px;
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: 1;
-    pointer-events: none;
-    display: inline-block;
   }
 
   .spinner {
@@ -801,8 +770,6 @@
     color: var(--ink);
     font-weight: 600;
     font-family: 'Courier New', monospace;
-    overflow-wrap: anywhere;
-    text-align: right;
   }
 
   .receipt-row.amount {
@@ -1048,8 +1015,13 @@
         </button>
       </form>
 
-      <!-- status banner removed as requested -->
-      <div style="display:none" aria-hidden="true"></div>
+      <div class="status" id="status-banner" role="status" aria-live="polite">
+        <span class="status-icon" id="status-icon"></span>
+        <div>
+          <div id="status-message"></div>
+          <div class="receipt" id="status-receipt"></div>
+        </div>
+      </div>
     </section>
   </main>
 
@@ -1101,7 +1073,9 @@
       </div>
 
       <div class="modal-actions">
-        <!-- Action buttons removed as requested -->
+        <button class="modal-btn" id="failedCheckStatus">Check Status</button>
+        <button class="modal-btn" id="failedRetry">Try Again</button>
+        <button class="modal-btn primary" id="failedNewTransaction">New Transaction</button>
       </div>
     </div>
   </div>
@@ -1126,7 +1100,8 @@
       </div>
 
       <div class="modal-actions">
-        <!-- Pending modal actions removed as requested -->
+        <button class="modal-btn" id="pendingResend">Resend STK Push</button>
+        <button class="modal-btn primary" id="pendingCancel">Cancel & Start Over</button>
       </div>
     </div>
   </div>
@@ -1161,6 +1136,8 @@
   const failedRetryBtn = document.getElementById("failedRetry");
   const failedCheckStatusBtn = document.getElementById("failedCheckStatus");
   const failedNewTransactionBtn = document.getElementById("failedNewTransaction");
+  const pendingResendBtn = document.getElementById("pendingResend");
+  const pendingCancelBtn = document.getElementById("pendingCancel");
   const countdownTimer = document.getElementById("countdownTimer");
   const pendingMessage = document.getElementById("pendingMessage");
 
@@ -1219,10 +1196,8 @@
   }
 
   function showSuccessModal(data) {
-    const transactionId = data.transactionId || data.mpesaReceiptNumber || data.checkoutRequestId || "Pending";
-
     document.getElementById("receiptPhone").textContent = data.phone;
-    document.getElementById("receiptTxnId").textContent = transactionId;
+    document.getElementById("receiptTxnId").textContent = data.mpesaReceiptNumber || "N/A";
     document.getElementById("receiptAmount").textContent = formatAmount(data.amount);
     document.getElementById("successTime").textContent = new Date(data.completedAt).toLocaleString();
     
@@ -1234,37 +1209,23 @@
     }, 5000);
   }
 
-  function showFailedModal(reason, options = {}) {
-    const minimal = Boolean(options.minimal);
-    const autoDismiss = Boolean(options.autoDismiss);
-
-    const reasonText = reason || "The payment could not be completed. Please try again.";
-
-    if (minimal) {
-      document.getElementById("failedReason").textContent = "Payment failed";
-      // hide action buttons for the minimal transient message
-      if (failedRetryBtn) failedRetryBtn.style.display = "none";
-      if (failedCheckStatusBtn) failedCheckStatusBtn.style.display = "none";
-      if (failedNewTransactionBtn) failedNewTransactionBtn.style.display = "none";
-      // hide status banner if present
-      if (statusBanner) statusBanner.style.display = "none";
-    } else {
-      document.getElementById("failedReason").textContent = reasonText;
-      // ensure action buttons are visible for full failure modal
-      if (failedRetryBtn) failedRetryBtn.style.display = "inline-block";
-      if (failedCheckStatusBtn) failedCheckStatusBtn.style.display = "inline-block";
-      if (failedNewTransactionBtn) failedNewTransactionBtn.style.display = "inline-block";
-      if (statusBanner) statusBanner.style.display = "block";
+  function showConfirmedPayment(data) {
+    if (pollTimer) {
+      clearTimeout(pollTimer);
+      pollTimer = null;
     }
+    stopCountdown();
+    hideAllModals();
+    currentTransactionData = data;
+    showSuccessModal(data);
+    setStatus("success", "Payment received. Thank you!", { receipt: data.mpesaReceiptNumber });
+  }
 
-    console.error("Failed modal shown with reason:", minimal ? reasonText : reasonText);
+  function showFailedModal(reason) {
+    const reasonText = reason || "The payment could not be completed. Please try again.";
+    document.getElementById("failedReason").textContent = reasonText;
+    console.error("Failed modal shown with reason:", reasonText);
     failedModal.classList.add("show");
-
-    // Always auto-hide the failed modal and reset the form after 2 seconds
-    setTimeout(() => {
-      failedModal.classList.remove("show");
-      resetForm();
-    }, 2000);
   }
 
   function showPendingModal(phone, amount) {
@@ -1310,20 +1271,16 @@
   function setStatus(type, message, options = {}) {
     const spinner = Boolean(options.spinner);
     const receipt = options.receipt || "";
-    if (statusBanner) {
-      statusBanner.className = `status show ${type}`;
-      if (statusIcon) statusIcon.innerHTML = spinner ? '<span class="spinner"></span>' : iconFor(type);
-      if (statusMessage) statusMessage.textContent = message;
+    statusBanner.className = `status show ${type}`;
+    statusIcon.innerHTML = spinner ? '<span class="spinner"></span>' : iconFor(type);
+    statusMessage.textContent = message;
 
-      if (statusReceipt) {
-        if (receipt) {
-          statusReceipt.style.display = "block";
-          statusReceipt.innerHTML = `Receipt: <code>${receipt}</code>`;
-        } else {
-          statusReceipt.style.display = "none";
-          statusReceipt.textContent = "";
-        }
-      }
+    if (receipt) {
+      statusReceipt.style.display = "block";
+      statusReceipt.innerHTML = `Receipt: <code>${receipt}</code>`;
+    } else {
+      statusReceipt.style.display = "none";
+      statusReceipt.textContent = "";
     }
   }
 
@@ -1377,7 +1334,7 @@
     phoneInput.value = "";
     amountInput.value = "50";
     updateSummary();
-    if (statusBanner) statusBanner.classList.remove("show");
+    statusBanner.classList.remove("show");
     clearFieldErrors();
     hideAllModals();
     stopCountdown();
@@ -1387,44 +1344,36 @@
   async function pollStatus(checkoutRequestId, attemptsLeft = 40) {
     if (attemptsLeft <= 0) {
       stopCountdown();
-      pendingModal.classList.remove("show");
-      setStatus("pending", "The transaction is still under processing. Please wait or refresh the page.", { spinner: false });
+      setStatus("pending", "The transaction is still under processing. Use Check Status in a moment.", { spinner: true });
       return;
     }
 
     try {
       const res = await fetch(`${API_BASE_URL}/api/mpesa/status/${checkoutRequestId}`);
       const data = await res.json();
-        console.log("pollStatus response:", data);
 
-      if (data.success === false) {
-        console.warn("pollStatus pending verification:", data);
-        if (data.status === "PENDING") {
-          pendingMessage.textContent = "Payment submitted? We are still checking for M-Pesa confirmation...";
-          setStatus("pending", data.message || "Waiting for M-Pesa confirmation.", { spinner: true });
-        } else {
-          setStatus("error", data.message || "Unable to verify payment status.", { receipt: data.detail || "" });
-        }
-        pollTimer = setTimeout(() => pollStatus(checkoutRequestId, attemptsLeft - 1), 3000);
+      if (!res.ok || data.success === false) {
+        stopCountdown();
+        const message = data.message || "Unable to verify the payment status with M-Pesa.";
+        setStatus("error", message);
+        pendingMessage.textContent = message;
         return;
       }
 
       if (data.status === "SUCCESS") {
-        stopCountdown();
-        pendingModal.classList.remove("show");
-        setTimeout(() => {
-          currentTransactionData = data;
-          showSuccessModal(data);
-          setStatus("success", "Payment received. Thank you!", { receipt: data.transactionId || data.mpesaReceiptNumber });
-        }, 200);
+        showConfirmedPayment(data);
         return;
       }
 
       if (data.status === "FAILED") {
+        if (pollTimer) {
+          clearTimeout(pollTimer);
+          pollTimer = null;
+        }
         stopCountdown();
         pendingModal.classList.remove("show");
         setTimeout(() => {
-          showFailedModal(null, { minimal: true, autoDismiss: true });
+          showFailedModal(data.resultDesc || "Payment was not completed. You can try again.");
         }, 200);
         return;
       }
@@ -1432,7 +1381,6 @@
       setStatus("pending", data.message || data.resultDesc || "Waiting for you to enter your M-Pesa PIN.", { spinner: true });
       pollTimer = setTimeout(() => pollStatus(checkoutRequestId, attemptsLeft - 1), 3000);
     } catch (err) {
-      console.error("pollStatus error:", err);
       pollTimer = setTimeout(() => pollStatus(checkoutRequestId, attemptsLeft - 1), 3000);
     }
   }
@@ -1475,13 +1423,9 @@
       if (!data.success) {
         setLoading(false);
         console.error("STK Push failed:", data);
-        const rawText = data.raw && typeof data.raw === 'object' ? JSON.stringify(data.raw) : data.raw || '';
         const errorMsg = data.message || "Something went wrong. Please try again.";
         setStatus("error", errorMsg);
-        if (rawText) {
-          console.error("STK Push raw error:", rawText);
-        }
-        showFailedModal(`${errorMsg}${rawText ? ' — ' + rawText : ''}`);
+        showFailedModal(errorMsg);
         return;
       }
 
@@ -1499,11 +1443,80 @@
 
   // Modal Button Handlers
   successNewTransactionBtn.addEventListener("click", resetForm);
-  // pendingCancelBtn listener removed per UI simplification
+  failedNewTransactionBtn.addEventListener("click", resetForm);
+  pendingCancelBtn.addEventListener("click", () => {
+    if (pollTimer) clearTimeout(pollTimer);
+    stopCountdown();
+    pendingModal.classList.remove("show");
+    setTimeout(() => {
+      showFailedModal("You have cancelled the transaction. Please try again.");
+    }, 200);
+  });
 
-  // pendingResendBtn listener removed per UI simplification
+  pendingResendBtn.addEventListener("click", async () => {
+    if (!currentCheckoutRequestId) return;
 
-  
+    pendingResendBtn.disabled = true;
+    pendingResendBtn.textContent = "Sending...";
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/mpesa/resend/${currentCheckoutRequestId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        currentCheckoutRequestId = data.checkoutRequestId;
+        setStatus("pending", "STK push resent. Check your phone.", { spinner: true });
+        if (pollTimer) clearTimeout(pollTimer);
+        stopCountdown();
+        startCountdown();
+        pollStatus(data.checkoutRequestId);
+      } else {
+        alert("Could not resend STK push: " + data.message);
+      }
+    } catch (err) {
+      alert("Error resending STK push. Check your connection and try again.");
+    } finally {
+      pendingResendBtn.disabled = false;
+      pendingResendBtn.textContent = "Resend STK Push";
+    }
+  });
+
+  failedRetryBtn.addEventListener("click", () => {
+    hideAllModals();
+    // Keep the form data and retry
+  });
+
+  failedCheckStatusBtn.addEventListener("click", async () => {
+    if (!currentCheckoutRequestId) {
+      alert("No transaction to check. Please start over.");
+      return;
+    }
+
+    failedCheckStatusBtn.disabled = true;
+    failedCheckStatusBtn.textContent = "Checking...";
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/mpesa/status/${currentCheckoutRequestId}`);
+      const data = await res.json();
+
+      if (data.status === "SUCCESS") {
+        showConfirmedPayment(data);
+      } else if (data.status === "PENDING") {
+        alert("Payment is still being processed. Please wait a moment and try again.");
+      } else {
+        alert("Payment status: " + (data.resultDesc || "Unknown"));
+      }
+    } catch (err) {
+      alert("Could not check payment status. Please try again.");
+    } finally {
+      failedCheckStatusBtn.disabled = false;
+      failedCheckStatusBtn.textContent = "Check Status";
+    }
+  });
 
   // Close modals when clicking overlay
   document.getElementById("successModal").addEventListener("click", (e) => {
