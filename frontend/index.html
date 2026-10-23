@@ -801,6 +801,8 @@
     color: var(--ink);
     font-weight: 600;
     font-family: 'Courier New', monospace;
+    overflow-wrap: anywhere;
+    text-align: right;
   }
 
   .receipt-row.amount {
@@ -1132,7 +1134,7 @@
 <script>
   const API_BASE_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
     ? "http://localhost:3001"
-    : "https://stk-push-production.up.railway.app";
+    : "https://stk-push-3jey.onrender.com";
 
   // DOM Elements
   const form = document.getElementById("payment-form");
@@ -1217,8 +1219,10 @@
   }
 
   function showSuccessModal(data) {
+    const transactionId = data.transactionId || data.mpesaReceiptNumber || data.checkoutRequestId || "Pending";
+
     document.getElementById("receiptPhone").textContent = data.phone;
-    document.getElementById("receiptTxnId").textContent = data.mpesaReceiptNumber || "N/A";
+    document.getElementById("receiptTxnId").textContent = transactionId;
     document.getElementById("receiptAmount").textContent = formatAmount(data.amount);
     document.getElementById("successTime").textContent = new Date(data.completedAt).toLocaleString();
     
@@ -1411,7 +1415,7 @@
         setTimeout(() => {
           currentTransactionData = data;
           showSuccessModal(data);
-          setStatus("success", "Payment received. Thank you!", { receipt: data.mpesaReceiptNumber });
+          setStatus("success", "Payment received. Thank you!", { receipt: data.transactionId || data.mpesaReceiptNumber });
         }, 200);
         return;
       }

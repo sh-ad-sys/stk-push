@@ -83,21 +83,37 @@ that ngrok's free URL changes every time you restart it, so you'll need to
 update `.env` again each session — fine for testing, but for a real launch
 you'll want a real deployment (see below).
 
-### Deploying for real use
+### Deploy the backend to Render
 
-Once you're ready to actually accept payments rather than just test:
+1. Push this repository to GitHub and in Render choose **New → Web Service**.
+2. Connect the repository and set **Root Directory** to `backend`,
+   **Build Command** to `npm install`, and **Start Command** to `npm start`.
+   Render supplies the `PORT` environment variable; do not hard-code a port in
+   the Render dashboard.
+3. In the service's **Environment** settings, add the Daraja variables from
+   `backend/.env.example`. Start with `MPESA_ENV=sandbox` and sandbox
+   credentials. Do not upload or commit your local `.env` file.
+4. Deploy the service. In its Render page, copy the public `onrender.com` URL.
+   Set `MPESA_CALLBACK_URL` to that URL followed by
+   `/api/mpesa/callback` (for example,
+   `https://your-service.onrender.com/api/mpesa/callback`) and save the
+   environment variable. Render will redeploy the service.
+5. Check that `https://your-service.onrender.com/api/health` returns
+   `{"status":"ok"}`.
+6. Update `API_BASE_URL` in `frontend/index.html` to the Render service's
+   `https://` URL, then redeploy the frontend. If your frontend uses a different
+   domain from the one already allowed in `backend/server.js`, add that exact
+   origin to the backend CORS allowlist and redeploy.
 
-1. Deploy `backend/` to any Node-friendly host (Render, Railway, Fly.io, a VPS, etc.).
-2. Set the same environment variables there as in `.env`, but point
-   `MPESA_CALLBACK_URL` at your real deployed URL, e.g.
-   `https://yourapp.com/api/mpesa/callback`.
-3. Switch `MPESA_ENV=production` and use your **production** Daraja credentials
-   (these are different from sandbox ones — apply for "Go Live" on the Daraja
-   portal first).
-4. Update `frontend/index.html`'s `API_BASE_URL` to point at your deployed backend
-   instead of `localhost:3000`.
-5. Host `frontend/index.html` anywhere static (Netlify, Vercel, S3, or the same
-   server).
+Use production Daraja credentials and `MPESA_ENV=production` only after
+Safaricom approves the app for Go Live. Never put consumer secrets or passkeys
+in frontend code or in a public repository.
+
+The backend currently keeps transaction records in memory, so a restart or
+instance replacement loses those records. Replace that store with a persistent
+database before relying on this service for production payments. Render's free
+web services can also spin down when idle; choose an always-on instance if
+payment callback responsiveness is important.
 
 ## 4. Run it locally
 

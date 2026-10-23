@@ -12,7 +12,7 @@ const app = express();
 
 // CORS configuration with explicit preflight handling
 app.use(cors({
-  origin: ['https://stk-push-zeta.vercel.app', 'http://localhost:8080', 'http://localhost:5173'],
+  origin: ['https://mpesa-paymentt.vercel.app', 'http://localhost:8080', 'http://localhost:5173'],
   credentials: true,
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -22,7 +22,7 @@ app.use(express.json());
 
 // Explicit OPTIONS handler for preflight requests
 app.options('*', cors({
-  origin: ['https://stk-push-zeta.vercel.app', 'http://localhost:8080', 'http://localhost:5173'],
+  origin: ['https://mpesa-paymentt.vercel.app', 'http://localhost:8080', 'http://localhost:5173'],
   credentials: true,
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -85,6 +85,10 @@ function mergeTransaction(checkoutRequestId, data) {
 
   transactions.set(checkoutRequestId, record);
   return record;
+}
+
+function getCallbackMetadataValue(items, name) {
+  return items.find((item) => String(item.Name).toLowerCase() === name.toLowerCase())?.Value;
 }
 
 /**
@@ -176,15 +180,18 @@ app.post("/api/mpesa/callback", (req, res) => {
   if (isSuccessCode(ResultCode)) {
     // Payment successful — extract details from CallbackMetadata
     const items = CallbackMetadata?.Item || [];
-    const get = (name) => items.find((i) => i.Name === name)?.Value;
+    const get = (name) => getCallbackMetadataValue(items, name);
+    const transactionId = get("MpesaReceiptNumber");
 
     const record = mergeTransaction(CheckoutRequestID, {
       status: "SUCCESS",
-      mpesaReceiptNumber: get("MpesaReceiptNumber"),
+      transactionId,
+      mpesaReceiptNumber: transactionId,
       amount: get("Amount"),
       phone: get("PhoneNumber"),
       transactionDate: get("TransactionDate"),
       resultDesc: ResultDesc,
+      rawCallback: callback,
       completedAt: new Date().toISOString(),
     });
     console.log(`Transaction ${CheckoutRequestID} marked SUCCESS`, record);
