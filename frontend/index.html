@@ -1330,6 +1330,11 @@
   }
 
   function resetForm() {
+    if (pollTimer) {
+      clearTimeout(pollTimer);
+      pollTimer = null;
+    }
+    currentCheckoutRequestId = null;
     form.reset();
     phoneInput.value = "";
     amountInput.value = "50";
@@ -1341,23 +1346,20 @@
     pendingMessage.textContent = "Waiting for you to enter PIN on your phone...";
   }
 
-  async function pollStatus(checkoutRequestId, attemptsLeft = 40) {
-    if (attemptsLeft <= 0) {
-      stopCountdown();
-      setStatus("pending", "The transaction is still under processing. Use Check Status in a moment.", { spinner: true });
-      return;
-    }
-
+  async function pollStatus(checkoutRequestId) {
+    if (currentCheckoutRequestId !== checkoutRequestId) return;
     try {
       const res = await fetch(`${API_BASE_URL}/api/mpesa/status/${checkoutRequestId}`);
       const data = await res.json();
+
+      if (currentCheckoutRequestId !== checkoutRequestId) return;
 
       if (!res.ok || data.success === false) {
         const message = data.message || "Status check is temporarily unavailable. Waiting for M-Pesa payment confirmation.";
         console.warn("Payment status check failed; will retry:", message);
         setStatus("pending", message, { spinner: true });
         pendingMessage.textContent = message;
-        pollTimer = setTimeout(() => pollStatus(checkoutRequestId, attemptsLeft), 5000);
+        pollTimer = setTimeout(() => pollStatus(checkoutRequestId), 10000);
         return;
       }
 
@@ -1380,9 +1382,10 @@
       }
 
       setStatus("pending", data.message || data.resultDesc || "Waiting for you to enter your M-Pesa PIN.", { spinner: true });
-      pollTimer = setTimeout(() => pollStatus(checkoutRequestId, attemptsLeft - 1), 3000);
+      pollTimer = setTimeout(() => pollStatus(checkoutRequestId), 10000);
     } catch (err) {
-      pollTimer = setTimeout(() => pollStatus(checkoutRequestId, attemptsLeft - 1), 3000);
+      if (currentCheckoutRequestId !== checkoutRequestId) return;
+      pollTimer = setTimeout(() => pollStatus(checkoutRequestId), 10000);
     }
   }
 
@@ -1400,7 +1403,11 @@
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (pollTimer) clearTimeout(pollTimer);
+    if (pollTimer) {
+      clearTimeout(pollTimer);
+      pollTimer = null;
+    }
+    currentCheckoutRequestId = null;
     stopCountdown();
 
     if (!validateForm()) return;
@@ -1446,7 +1453,11 @@
   successNewTransactionBtn.addEventListener("click", resetForm);
   failedNewTransactionBtn.addEventListener("click", resetForm);
   pendingCancelBtn.addEventListener("click", () => {
-    if (pollTimer) clearTimeout(pollTimer);
+    if (pollTimer) {
+      clearTimeout(pollTimer);
+      pollTimer = null;
+    }
+    currentCheckoutRequestId = null;
     stopCountdown();
     pendingModal.classList.remove("show");
     setTimeout(() => {
@@ -1469,9 +1480,12 @@
       const data = await res.json();
 
       if (data.success) {
+        if (pollTimer) {
+          clearTimeout(pollTimer);
+          pollTimer = null;
+        }
         currentCheckoutRequestId = data.checkoutRequestId;
         setStatus("pending", "STK push resent. Check your phone.", { spinner: true });
-        if (pollTimer) clearTimeout(pollTimer);
         stopCountdown();
         startCountdown();
         pollStatus(data.checkoutRequestId);

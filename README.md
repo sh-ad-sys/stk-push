@@ -24,8 +24,9 @@ mpesa-stk-push/
 4. The customer's phone receives a prompt to enter their M-Pesa PIN.
 5. Once they respond (success, cancel, or timeout), Safaricom calls your backend's
    `/api/mpesa/callback` URL with the result.
-6. The frontend polls `/api/mpesa/status/:checkoutRequestId` every few seconds and
-   shows the final result.
+6. The frontend polls `/api/mpesa/status/:checkoutRequestId` every few seconds.
+   This endpoint reads the transaction state saved by the callback; Daraja's
+   callback is the source of truth for the final result.
 
 **The callback URL in step 5 must be a public HTTPS URL.** Safaricom's servers
 cannot reach `localhost`. This is the part that trips people up — see step 3 below.
@@ -175,3 +176,8 @@ test number, not your own.
 **Frontend says "still awaiting" forever** — your callback URL isn't publicly
 reachable. Confirm ngrok (or your deployment) is running and the URL in `.env`
 matches exactly, including `https://` and the `/api/mpesa/callback` path.
+After a successful PIN entry, check the backend logs for `M-Pesa callback
+received` with the matching checkout request ID. If no callback is logged,
+verify the `MPESA_CALLBACK_URL` configured in the deployed backend points to
+that public callback endpoint. The status endpoint does not query Daraja;
+it reports only the state received through the callback.

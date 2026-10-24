@@ -1,10 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import {
-  initiateSTKPush,
-  querySTKStatus,
-} from "./mpesaService.js";
+import { initiateSTKPush } from "./mpesaService.js";
 
 dotenv.config();
 
@@ -16,26 +13,6 @@ app.use(express.json());
 // This is fine for a small payment-only app / demo. For production,
 // replace with a real database (Postgres, MongoDB, etc).
 const transactions = new Map();
-
-function getQueryStatus(result) {
-  const resultCode = String(result.ResultCode ?? "");
-  const resultDesc = String(result.ResultDesc || result.errorMessage || "").toLowerCase();
-
-  if (resultCode === "0") {
-    return "SUCCESS";
-  }
-
-  if (
-    result.ResultCode === undefined ||
-    resultDesc.includes("under processing") ||
-    resultDesc.includes("being processed") ||
-    resultDesc.includes("request is being processed")
-  ) {
-    return "PENDING";
-  }
-
-  return "FAILED";
-}
 
 /**
  * POST /api/mpesa/stk-push
@@ -98,8 +75,6 @@ app.post("/api/mpesa/stk-push", async (req, res) => {
  * the payment prompt on their phone. Must be a public HTTPS URL.
  */
 app.post("/api/mpesa/callback", (req, res) => {
-  console.log("M-Pesa callback received:", JSON.stringify(req.body, null, 2));
-
   const callback = req.body?.Body?.stkCallback;
 
   if (!callback) {
@@ -108,10 +83,16 @@ app.post("/api/mpesa/callback", (req, res) => {
   }
 
   const { CheckoutRequestID, ResultCode, ResultDesc, CallbackMetadata } = callback;
+  const isSuccess = String(ResultCode) === "0";
+  console.info("M-Pesa callback received:", {
+    checkoutRequestId: CheckoutRequestID,
+    resultCode: ResultCode,
+    status: isSuccess ? "SUCCESS" : "FAILED",
+  });
 
   const existing = transactions.get(CheckoutRequestID) || {};
 
-  if (String(ResultCode) === "0") {
+  if (isSuccess) {
     // Payment successful — extract details from CallbackMetadata
     const items = CallbackMetadata?.Item || [];
     const get = (name) => items.find((i) => i.Name === name)?.Value;
@@ -142,59 +123,20 @@ app.post("/api/mpesa/callback", (req, res) => {
 
 /**
  * GET /api/mpesa/status/:checkoutRequestId
- * The frontend polls this to find out whether payment succeeded.
- * Falls back to actively querying Safaricom if no callback has landed yet.
+ * The frontend polls this endpoint for the result saved by the Daraja callback.
  */
-app.get("/api/mpesa/status/:checkoutRequestId", async (req, res) => {
+app.get("/api/mpesa/status/:checkoutRequestId", (req, res) => {
   const { checkoutRequestId } = req.params;
   const record = transactions.get(checkoutRequestId);
 
-  if (record && record.status !== "PENDING") {
-    return res.json({ success: true, ...record });
-  }
-
-  // No callback yet — actively ask Safaricom for the current status.
-  try {
-    const result = await querySTKStatus(checkoutRequestId);
-    const latestRecord = transactions.get(checkoutRequestId);
-
-    // A callback may have arrived while the Daraja status query was in flight.
-    // Never let an older query result overwrite that terminal callback result.
-    if (latestRecord && latestRecord.status !== "PENDING") {
-      return res.json({ success: true, ...latestRecord });
-    }
-
-    const status = getQueryStatus(result);
-    const updatedRecord = {
-      ...latestRecord,
-      status,
-      resultDesc: result.ResultDesc,
-      ...(status !== "PENDING" ? { completedAt: new Date().toISOString() } : {}),
-    };
-
-    if (latestRecord || status !== "PENDING") {
-      transactions.set(checkoutRequestId, updatedRecord);
-    }
-
-    return res.json({
-      success: true,
-      ...updatedRecord,
-      raw: result,
-    });
-  } catch (error) {
-    console.error("STK status query failed:", error.message);
-
-    const latestRecord = transactions.get(checkoutRequestId);
-    if (latestRecord && latestRecord.status !== "PENDING") {
-      return res.json({ success: true, ...latestRecord });
-    }
-
-    return res.json({
-      success: true,
+  return res.json({
+    success: true,
+    ...(record || {
       status: "PENDING",
-      message: "Status check is temporarily unavailable. Waiting for M-Pesa payment confirmation.",
-    });
-  }
+      checkoutRequestId,
+      message: "Waiting for M-Pesa payment confirmation.",
+    }),
+  });
 });
 
 /**
