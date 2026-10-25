@@ -2,17 +2,21 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { initiateSTKPush } from "./mpesaService.js";
+import {
+  closeTransactionStore,
+  connectTransactionStore,
+  createPendingTransaction,
+  deleteTransaction,
+  getRecentTransactions,
+  getTransaction,
+  saveTransaction,
+} from "./transactionStore.js";
 
 dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
-
-// In-memory store of transactions, keyed by CheckoutRequestID.
-// This is fine for a small payment-only app / demo. For production,
-// replace with a real database (Postgres, MongoDB, etc).
-const transactions = new Map();
 
 /**
  * POST /api/mpesa/stk-push
@@ -38,14 +42,20 @@ app.post("/api/mpesa/stk-push", async (req, res) => {
     });
 
     if (result.ResponseCode === "0") {
-      transactions.set(result.CheckoutRequestID, {
+      const transaction = {
         status: "PENDING",
         phone,
         amount,
         merchantRequestId: result.MerchantRequestID,
         checkoutRequestId: result.CheckoutRequestID,
         createdAt: new Date().toISOString(),
-      });
+      };
+
+      try {
+        await createPendingTransaction(result.CheckoutRequestID, transaction);
+      } catch (error) {
+        console.error("Unable to persist accepted STK push:", error.message);
+      }
 
       return res.json({
         success: true,
@@ -74,7 +84,7 @@ app.post("/api/mpesa/stk-push", async (req, res) => {
  * This is the URL Safaricom calls once the customer completes (or cancels)
  * the payment prompt on their phone. Must be a public HTTPS URL.
  */
-app.post("/api/mpesa/callback", (req, res) => {
+app.post("/api/mpesa/callback", async (req, res) => {
   const callback = req.body?.Body?.stkCallback;
 
   if (!callback) {
@@ -90,31 +100,34 @@ app.post("/api/mpesa/callback", (req, res) => {
     status: isSuccess ? "SUCCESS" : "FAILED",
   });
 
-  const existing = transactions.get(CheckoutRequestID) || {};
+  try {
+    const existing = await getTransaction(CheckoutRequestID) || {};
 
-  if (isSuccess) {
-    // Payment successful — extract details from CallbackMetadata
-    const items = CallbackMetadata?.Item || [];
-    const get = (name) => items.find((i) => i.Name === name)?.Value;
+    if (isSuccess) {
+      const items = CallbackMetadata?.Item || [];
+      const get = (name) => items.find((i) => i.Name === name)?.Value;
 
-    transactions.set(CheckoutRequestID, {
-      ...existing,
-      status: "SUCCESS",
-      mpesaReceiptNumber: get("MpesaReceiptNumber"),
-      amount: get("Amount"),
-      phone: get("PhoneNumber"),
-      transactionDate: get("TransactionDate"),
-      resultDesc: ResultDesc,
-      completedAt: new Date().toISOString(),
-    });
-  } else {
-    // Payment failed or was cancelled by the user
-    transactions.set(CheckoutRequestID, {
-      ...existing,
-      status: "FAILED",
-      resultDesc: ResultDesc,
-      completedAt: new Date().toISOString(),
-    });
+      await saveTransaction(CheckoutRequestID, {
+        ...existing,
+        status: "SUCCESS",
+        mpesaReceiptNumber: get("MpesaReceiptNumber"),
+        amount: get("Amount") ?? existing.amount,
+        phone: get("PhoneNumber") ?? existing.phone,
+        transactionDate: get("TransactionDate"),
+        resultDesc: ResultDesc,
+        completedAt: new Date().toISOString(),
+      });
+    } else {
+      await saveTransaction(CheckoutRequestID, {
+        ...existing,
+        status: "FAILED",
+        resultDesc: ResultDesc,
+        completedAt: new Date().toISOString(),
+      });
+    }
+  } catch (error) {
+    console.error("Unable to persist M-Pesa callback:", error.message);
+    return res.status(500).json({ ResultCode: 1, ResultDesc: "Callback persistence failed" });
   }
 
   // Always acknowledge receipt to Safaricom, or it will retry the callback.
@@ -125,33 +138,43 @@ app.post("/api/mpesa/callback", (req, res) => {
  * GET /api/mpesa/status/:checkoutRequestId
  * The frontend polls this endpoint for the result saved by the Daraja callback.
  */
-app.get("/api/mpesa/status/:checkoutRequestId", (req, res) => {
+app.get("/api/mpesa/status/:checkoutRequestId", async (req, res) => {
   const { checkoutRequestId } = req.params;
-  const record = transactions.get(checkoutRequestId);
+  try {
+    const record = await getTransaction(checkoutRequestId);
 
-  return res.json({
-    success: true,
-    ...(record || {
-      status: "PENDING",
-      checkoutRequestId,
-      message: "Waiting for M-Pesa payment confirmation.",
-    }),
-  });
+    return res.json({
+      success: true,
+      ...(record || {
+        status: "PENDING",
+        checkoutRequestId,
+        message: "Waiting for M-Pesa payment confirmation.",
+      }),
+    });
+  } catch (error) {
+    console.error("Unable to read payment status:", error.message);
+    return res.status(503).json({
+      success: false,
+      message: "Payment status is temporarily unavailable. Please keep this page open.",
+    });
+  }
 });
 
 /**
  * GET /api/mpesa/history
  * Returns recent transactions for display in history/queue
  */
-app.get("/api/mpesa/history", (req, res) => {
-  const history = Array.from(transactions.values())
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .slice(0, 10);
-  
-  res.json({
-    success: true,
-    transactions: history,
-  });
+app.get("/api/mpesa/history", async (req, res) => {
+  try {
+    const history = await getRecentTransactions();
+    return res.json({ success: true, transactions: history });
+  } catch (error) {
+    console.error("Unable to read transaction history:", error.message);
+    return res.status(503).json({
+      success: false,
+      message: "Transaction history is temporarily unavailable.",
+    });
+  }
 });
 
 /**
@@ -160,7 +183,16 @@ app.get("/api/mpesa/history", (req, res) => {
  */
 app.post("/api/mpesa/resend/:checkoutRequestId", async (req, res) => {
   const { checkoutRequestId } = req.params;
-  const record = transactions.get(checkoutRequestId);
+  let record;
+  try {
+    record = await getTransaction(checkoutRequestId);
+  } catch (error) {
+    console.error("Unable to read transaction for resend:", error.message);
+    return res.status(503).json({
+      success: false,
+      message: "Transaction data is temporarily unavailable.",
+    });
+  }
 
   if (!record) {
     return res.status(404).json({
@@ -177,9 +209,7 @@ app.post("/api/mpesa/resend/:checkoutRequestId", async (req, res) => {
     });
 
     if (result.ResponseCode === "0") {
-      // Update with new request IDs
-      transactions.delete(checkoutRequestId);
-      transactions.set(result.CheckoutRequestID, {
+      const newTransaction = {
         status: "PENDING",
         phone: record.phone,
         amount: record.amount,
@@ -187,7 +217,9 @@ app.post("/api/mpesa/resend/:checkoutRequestId", async (req, res) => {
         checkoutRequestId: result.CheckoutRequestID,
         createdAt: new Date().toISOString(),
         retriedAt: new Date().toISOString(),
-      });
+      };
+      await createPendingTransaction(result.CheckoutRequestID, newTransaction);
+      await deleteTransaction(checkoutRequestId);
 
       return res.json({
         success: true,
@@ -213,6 +245,25 @@ app.get("/api/health", (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`M-Pesa STK Push backend running on http://localhost:${PORT}`);
+
+async function startServer() {
+  await connectTransactionStore();
+
+  const server = app.listen(PORT, () => {
+    console.log(`M-Pesa STK Push backend running on http://localhost:${PORT}`);
+  });
+
+  for (const signal of ["SIGINT", "SIGTERM"]) {
+    process.on(signal, () => {
+      server.close(async () => {
+        await closeTransactionStore();
+        process.exit(0);
+      });
+    });
+  }
+}
+
+startServer().catch((error) => {
+  console.error("Backend startup failed:", error.message);
+  process.exitCode = 1;
 });

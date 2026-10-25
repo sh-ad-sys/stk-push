@@ -57,7 +57,17 @@ MPESA_CONSUMER_SECRET=...
 MPESA_SHORTCODE=174379
 MPESA_PASSKEY=...
 MPESA_CALLBACK_URL=https://YOUR-PUBLIC-URL/api/mpesa/callback
+MONGODB_URI=mongodb+srv://...
+MONGODB_DATABASE=stk_push
 ```
+
+Create a MongoDB Atlas cluster and database user, then put the Atlas connection
+string in `MONGODB_URI`. Keep it private and URL-encode special characters in
+the database user's password. Configure Atlas network access so the Render
+backend can connect. The backend stores each transaction as one document keyed
+by Daraja's checkout request ID; the callback and browser status endpoint read
+and update the same shared record. `MONGO_URI` is also accepted as an alias for
+`MONGODB_URI`.
 
 ### Getting a public callback URL for local testing
 
@@ -92,8 +102,9 @@ you'll want a real deployment (see below).
    Render supplies the `PORT` environment variable; do not hard-code a port in
    the Render dashboard.
 3. In the service's **Environment** settings, add the Daraja variables from
-   `backend/.env.example`. Start with `MPESA_ENV=sandbox` and sandbox
-   credentials. Do not upload or commit your local `.env` file.
+   `backend/.env.example`, including `MONGODB_URI` and `MONGODB_DATABASE`.
+   Start with `MPESA_ENV=sandbox` and sandbox credentials. Do not upload or
+   commit your local `.env` file.
 4. Deploy the service. In its Render page, copy the public `onrender.com` URL.
    Set `MPESA_CALLBACK_URL` to that URL followed by
    `/api/mpesa/callback` (for example,
@@ -110,11 +121,10 @@ Use production Daraja credentials and `MPESA_ENV=production` only after
 Safaricom approves the app for Go Live. Never put consumer secrets or passkeys
 in frontend code or in a public repository.
 
-The backend currently keeps transaction records in memory, so a restart or
-instance replacement loses those records. Replace that store with a persistent
-database before relying on this service for production payments. Render's free
-web services can also spin down when idle; choose an always-on instance if
-payment callback responsiveness is important.
+Transaction state is stored in MongoDB so callback results are visible across
+backend instances and survive restarts. Render's free web services can still
+spin down when idle; choose an always-on instance if payment callback
+responsiveness is important.
 
 ## 4. Run it locally
 
@@ -151,8 +161,7 @@ can simulate the customer's PIN entry directly from the Daraja portal's
 - Apply for "Go Live" on the Daraja portal to get production credentials and a
   real paybill/till shortcode.
 - Switch `MPESA_ENV=production` in your `.env`.
-- Replace the in-memory `transactions` Map in `server.js` with a real database
-  — right now, transaction records are lost if the server restarts.
+- Configure a persistent MongoDB Atlas database using `MONGODB_URI`.
 - Add HTTPS, request logging, and basic rate limiting on the public endpoints
   before handling real money.
 - Consider verifying the callback's authenticity (Safaricom doesn't sign
